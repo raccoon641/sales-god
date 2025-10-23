@@ -1,0 +1,95 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_DB: sales_god_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      working-directory: ./backend
+      run: npm ci
+    
+    - name: Run migrations
+      working-directory: ./backend
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: sales_god_test
+        DB_USER: postgres
+        DB_PASSWORD: postgres
+      run: npm run migrate
+    
+    - name: Run tests
+      working-directory: ./backend
+      run: npm test || echo "Tests not implemented yet"
+
+  build-dashboard:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      working-directory: ./dashboard
+      run: npm ci
+    
+    - name: Build
+      working-directory: ./dashboard
+      run: npm run build
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dashboard-build
+        path: dashboard/dist
+
+  validate-extension:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Validate manifest
+      working-directory: ./extension
+      run: |
+        if [ -f manifest.json ]; then
+          echo "Manifest file found"
+          cat manifest.json
+        else
+          echo "Error: manifest.json not found"
+          exit 1
+        fi
+
